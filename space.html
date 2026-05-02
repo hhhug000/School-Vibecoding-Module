@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural 3D Space</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div>Use arrow keys or WASD to move</div>
+        <div>Mouse to look around</div>
+    </div>
+
+    <a-scene background="color: #000000">
+        <!-- Camera with custom movement controller -->
+        <a-camera id="camera" position="0 0 0" look-controls>
+            <a-cursor></a-cursor>
+        </a-camera>
+
+        <!-- Stars -->
+        <a-entity id="stars"></a-entity>
+
+        <!-- Planets container -->
+        <a-entity id="planets"></a-entity>
+    </a-scene>
+
+    <script>
+        // Seeded random number generator for consistent generation
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed;
+            }
+            
+            next() {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                return this.seed / 233280;
+            }
+        }
+
+        // Generate stars
+        function generateStars() {
+            const starsContainer = document.getElementById('stars');
+            const starCount = 2000;
+            
+            for (let i = 0; i < starCount; i++) {
+                const angle1 = Math.random() * Math.PI * 2;
+                const angle2 = Math.random() * Math.PI * 2;
+                const distance = 500 + Math.random() * 500;
+                
+                const x = Math.cos(angle1) * Math.cos(angle2) * distance;
+                const y = Math.sin(angle2) * distance;
+                const z = Math.sin(angle1) * Math.cos(angle2) * distance;
+                
+                const star = document.createElement('a-sphere');
+                star.setAttribute('radius', 0.5 + Math.random() * 1.5);
+                star.setAttribute('position', `${x} ${y} ${z}`);
+                star.setAttribute('material', `color: #fff; emissive: #fff; emissiveIntensity: ${0.5 + Math.random() * 0.5}`);
+                starsContainer.appendChild(star);
+            }
+        }
+
+        // Generate planets procedurally
+        function generatePlanets() {
+            const planetsContainer = document.getElementById('planets');
+            const seed = 42;
+            const random = new SeededRandom(seed);
+            const planetCount = 15;
+
+            const colors = [
+                '#FF6B6B', // Red
+                '#4ECDC4', // Cyan
+                '#FFE66D', // Yellow
+                '#A8D8EA', // Light Blue
+                '#FF8B94', // Pink
+                '#C7CEEA', // Lavender
+                '#B5EAD7', // Mint
+                '#FFDAC1', // Peach
+                '#E2F0CB', // Light Green
+                '#FF6B9D'  // Hot Pink
+            ];
+
+            for (let i = 0; i < planetCount; i++) {
+                const angle1 = random.next() * Math.PI * 2;
+                const angle2 = random.next() * Math.PI * 2;
+                const distance = 50 + random.next() * 200;
+                
+                const x = Math.cos(angle1) * Math.cos(angle2) * distance;
+                const y = Math.sin(angle2) * distance;
+                const z = Math.sin(angle1) * Math.cos(angle2) * distance;
+                
+                const radius = 3 + random.next() * 8;
+                const color = colors[Math.floor(random.next() * colors.length)];
+                const rotationSpeed = 20 + random.next() * 60;
+                
+                const planet = document.createElement('a-sphere');
+                planet.setAttribute('radius', radius);
+                planet.setAttribute('position', `${x} ${y} ${z}`);
+                planet.setAttribute('material', `color: ${color}; emissive: ${color}; emissiveIntensity: 0.2; shininess: 30`);
+                planet.setAttribute('animation', `
+                    property: rotation;
+                    to: 0 360 0;
+                    dur: ${rotationSpeed * 1000};
+                    loop: true;
+                    easing: linear
+                `);
+                
+                planetsContainer.appendChild(planet);
+
+                // Add rings to some planets
+                if (random.next() > 0.6) {
+                    const ring = document.createElement('a-torus');
+                    ring.setAttribute('radius', radius * 1.5);
+                    ring.setAttribute('radius-tubular', 0.3);
+                    ring.setAttribute('position', `${x} ${y} ${z}`);
+                    ring.setAttribute('rotation', `${random.next() * 90} 0 ${random.next() * 90}`);
+                    ring.setAttribute('material', `color: ${color}; opacity: 0.6`);
+                    planetsContainer.appendChild(ring);
+                }
+            }
+        }
+
+        // Floaty movement with inertia
+        class FloatyController {
+            constructor() {
+                this.velocity = { x: 0, y: 0, z: 0 };
+                this.acceleration = { x: 0, y: 0, z: 0 };
+                this.keys = {};
+                this.friction = 0.94; // Higher = less friction, more floaty
+                this.moveSpeed = 0.3;
+                this.camera = document.getElementById('camera');
+                
+                this.setupListeners();
+                this.update();
+            }
+
+            setupListeners() {
+                document.addEventListener('keydown', (e) => {
+                    this.keys[e.key.toLowerCase()] = true;
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    this.keys[e.key.toLowerCase()] = false;
+                });
+            }
+
+            update() {
+                // Reset acceleration
+                this.acceleration = { x: 0, y: 0, z: 0 };
+
+                // Apply input
+                const forward = this.keys['w'] || this.keys['arrowup'];
+                const backward = this.keys['s'] || this.keys['arrowdown'];
+                const left = this.keys['a'] || this.keys['arrowleft'];
+                const right = this.keys['d'] || this.keys['arrowright'];
+                const up = this.keys[' '];
+                const down = this.keys['control'];
+
+                // Get camera direction
+                const rotation = this.camera.object3D.rotation;
+                const forward3D = new THREE.Vector3(0, 0, -1).applyEuler(rotation);
+                const right3D = new THREE.Vector3(1, 0, 0).applyEuler(rotation);
+                const up3D = new THREE.Vector3(0, 1, 0);
+
+                // Apply forces based on input
+                if (forward) {
+                    this.acceleration.x += forward3D.x * this.moveSpeed;
+                    this.acceleration.y += forward3D.y * this.moveSpeed;
+                    this.acceleration.z += forward3D.z * this.moveSpeed;
+                }
+                if (backward) {
+                    this.acceleration.x -= forward3D.x * this.moveSpeed;
+                    this.acceleration.y -= forward3D.y * this.moveSpeed;
+                    this.acceleration.z -= forward3D.z * this.moveSpeed;
+                }
+                if (left) {
+                    this.acceleration.x -= right3D.x * this.moveSpeed;
+                    this.acceleration.y -= right3D.y * this.moveSpeed;
+                    this.acceleration.z -= right3D.z * this.moveSpeed;
+                }
+                if (right) {
+                    this.acceleration.x += right3D.x * this.moveSpeed;
+                    this.acceleration.y += right3D.y * this.moveSpeed;
+                    this.acceleration.z += right3D.z * this.moveSpeed;
+                }
+                if (up) {
+                    this.acceleration.y += this.moveSpeed;
+                }
+                if (down) {
+                    this.acceleration.y -= this.moveSpeed;
+                }
+
+                // Apply acceleration to velocity
+                this.velocity.x += this.acceleration.x;
+                this.velocity.y += this.acceleration.y;
+                this.velocity.z += this.acceleration.z;
+
+                // Apply friction (inertia/drag)
+                this.velocity.x *= this.friction;
+                this.velocity.y *= this.friction;
+                this.velocity.z *= this.friction;
+
+                // Apply velocity to position
+                const pos = this.camera.getAttribute('position');
+                this.camera.setAttribute('position', {
+                    x: pos.x + this.velocity.x,
+                    y: pos.y + this.velocity.y,
+                    z: pos.z + this.velocity.z
+                });
+
+                // Continue updating
+                requestAnimationFrame(() => this.update());
+            }
+        }
+
+        // Initialize scene
+        function init() {
+            generateStars();
+            generatePlanets();
+            new FloatyController();
+        }
+
+        // Start after A-Frame is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const scene = document.querySelector('a-scene');
+            if (scene.hasLoaded) {
+                init();
+            } else {
+                scene.addEventListener('loaded', init);
+            }
+        });
+    </script>
+</body>
+</html>
