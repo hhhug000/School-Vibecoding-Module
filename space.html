@@ -27,15 +27,12 @@
 <body>
     <div id="info">
         <div>Use arrow keys or WASD to move</div>
-        <div>Click to lock pointer and look around</div>
-        <div id="lockStatus" style="color: #ffaa00; margin-top: 10px;">Click anywhere to enable pointer lock</div>
+        <div>Click to lock pointer</div>
     </div>
 
     <a-scene background="color: #000000">
-        <!-- Camera with custom movement controller -->
-        <a-camera id="camera" position="0 0 0" look-controls>
-            <a-cursor></a-cursor>
-        </a-camera>
+        <!-- Camera with look-controls for pointer lock -->
+        <a-camera id="camera" position="0 0 0" look-controls="pointerLockEnabled: true"></a-camera>
 
         <!-- Stars -->
         <a-entity id="stars"></a-entity>
@@ -148,12 +145,6 @@
                 this.friction = 0.94; // Higher = less friction, more floaty
                 this.moveSpeed = 0.3;
                 this.camera = document.getElementById('camera');
-                this.mouseX = 0;
-                this.mouseY = 0;
-                this.eulerX = 0;
-                this.eulerY = 0;
-                this.mouseSensitivity = 0.002;
-                this.isPointerLocked = false;
                 
                 this.setupListeners();
                 this.update();
@@ -167,63 +158,6 @@
                 document.addEventListener('keyup', (e) => {
                     this.keys[e.key.toLowerCase()] = false;
                 });
-
-                // Pointer lock request
-                document.addEventListener('click', () => {
-                    const canvas = document.querySelector('canvas');
-                    if (canvas) {
-                        canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-                        canvas.requestPointerLock();
-                    }
-                });
-
-                // Pointer lock change events
-                document.addEventListener('pointerlockchange', () => this.onPointerLockChange());
-                document.addEventListener('mozpointerlockchange', () => this.onPointerLockChange());
-
-                // Mouse movement for camera rotation
-                document.addEventListener('mousemove', (e) => this.onMouseMove(e));
-
-                // Exit pointer lock on Escape
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape') {
-                        document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock;
-                        document.exitPointerLock();
-                    }
-                });
-            }
-
-            onPointerLockChange() {
-                this.isPointerLocked = document.pointerLockElement === document.querySelector('canvas') ||
-                                       document.mozPointerLockElement === document.querySelector('canvas');
-                
-                const lockStatus = document.getElementById('lockStatus');
-                if (this.isPointerLocked) {
-                    lockStatus.textContent = 'Pointer locked (Press ESC to unlock)';
-                    lockStatus.style.color = '#00ff00';
-                } else {
-                    lockStatus.textContent = 'Click anywhere to enable pointer lock';
-                    lockStatus.style.color = '#ffaa00';
-                }
-            }
-
-            onMouseMove(e) {
-                if (!this.isPointerLocked) return;
-
-                // Get mouse movement delta
-                const movementX = e.movementX || e.mozMovementX || 0;
-                const movementY = e.movementY || e.mozMovementY || 0;
-
-                // Update euler angles
-                this.eulerY -= movementX * this.mouseSensitivity;
-                this.eulerX -= movementY * this.mouseSensitivity;
-
-                // Clamp pitch (up/down rotation)
-                this.eulerX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.eulerX));
-
-                // Apply rotation to camera
-                const euler = new THREE.Euler(this.eulerX, this.eulerY, 0, 'YXZ');
-                this.camera.object3D.quaternion.setFromEuler(euler);
             }
 
             update() {
