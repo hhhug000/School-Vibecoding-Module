@@ -54,6 +54,16 @@
             }
         }
 
+        // Generate random alphanumeric string
+        function generateRandomString(length) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
         // Generate stars
         function generateStars() {
             const starsContainer = document.getElementById('stars');
@@ -99,19 +109,21 @@
             for (let i = 0; i < planetCount; i++) {
                 const angle1 = random.next() * Math.PI * 2;
                 const angle2 = random.next() * Math.PI * 2;
-                const distance = 50 + random.next() * 200;
+                const distance = 150 + random.next() * 500;
                 
                 const x = Math.cos(angle1) * Math.cos(angle2) * distance;
                 const y = Math.sin(angle2) * distance;
                 const z = Math.sin(angle1) * Math.cos(angle2) * distance;
                 
-                const radius = 3 + random.next() * 8;
+                const radius = 8 + random.next() * 20;
                 const color = colors[Math.floor(random.next() * colors.length)];
                 const rotationSpeed = 20 + random.next() * 60;
+                const planetId = generateRandomString(32);
                 
                 const planet = document.createElement('a-sphere');
                 planet.setAttribute('radius', radius);
                 planet.setAttribute('position', `${x} ${y} ${z}`);
+                planet.setAttribute('data-id', planetId);
                 planet.setAttribute('material', `color: ${color}; emissive: ${color}; emissiveIntensity: 0.2; shininess: 30`);
                 planet.setAttribute('animation', `
                     property: rotation;
