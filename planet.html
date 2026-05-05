@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Planet Viewer</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@1.4.0/dist/aframe-physics-system.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -42,7 +40,7 @@
     <div id="id-display">ID: Loading...</div>
     <div id="controls-info">WASD: Move | Mouse: Look | Click: Lock Pointer | SPACE: Jump</div>
     
-    <a-scene physics="debug: false; gravity: 0" background="color: #000011">
+    <a-scene background="color: #000011">
         <!-- Assets for ground texture -->
         <a-assets>
             <canvas id="groundTexture" width="1024" height="1024"></canvas>
@@ -299,7 +297,7 @@
             
             const updatePlayer = () => {
                 const currentTime = Date.now();
-                const deltaTime = (currentTime - lastTime) / 1000;
+                const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.05);
                 lastTime = currentTime;
                 
                 // Get camera direction for movement
@@ -332,43 +330,40 @@
                 // Update position
                 const currentPos = cameraRig.getAttribute('position');
                 
-                // Ground collision with heightmap BEFORE gravity application
-                const terrainHeightAtPlayer = getHeight(currentPos.x, currentPos.z, idSeed);
-                const standingHeight = terrainHeightAtPlayer + 1.6; // Player height above terrain
-                
-                // Check if currently grounded before applying gravity
-                const wasGrounded = player.isGrounded || currentPos.y <= standingHeight;
-                
-                // Apply gravity only if not grounded
-                if (!wasGrounded) {
-                    player.velocity.y += player.gravity * deltaTime;
-                } else {
-                    player.velocity.y = 0; // Reset velocity when grounded
-                }
-                
-                // Jump
-                if (keys.space && wasGrounded) {
-                    player.velocity.y = player.jumpPower;
-                }
-                
-                const newPos = {
-                    x: currentPos.x + player.velocity.x,
-                    y: currentPos.y + player.velocity.y * deltaTime,
-                    z: currentPos.z + player.velocity.z
-                };
-                
-                // Final collision check to ensure player stays on ground
-                const terrainHeightAtNewPos = getHeight(newPos.x, newPos.z, idSeed);
-                const newStandingHeight = terrainHeightAtNewPos + 1.6;
-                
-                if (newPos.y <= newStandingHeight) {
-                    // Collision with terrain
-                    player.isGrounded = true;
+                // Apply horizontal movement first
+                let newX = currentPos.x + player.velocity.x;
+                let newZ = currentPos.z + player.velocity.z;
+                let newY = currentPos.y;
+
+                const epsilon = 0.1;
+
+                // Apply gravity
+                player.velocity.y += player.gravity * deltaTime;
+                newY += player.velocity.y * deltaTime;
+
+                // Snap to terrain after movement to prevent tunneling
+                const terrainHeightAtNewPos = getHeight(newX, newZ, idSeed);
+                const standingHeight = terrainHeightAtNewPos + 1.6;
+
+                if (newY <= standingHeight + epsilon) {
+                    newY = standingHeight;
                     player.velocity.y = 0;
-                    newPos.y = newStandingHeight;
+                    player.isGrounded = true;
                 } else {
                     player.isGrounded = false;
                 }
+                
+                // Jump
+                if (keys.space && player.isGrounded) {
+                    player.velocity.y = player.jumpPower;
+                    player.isGrounded = false;
+                }
+                
+                const newPos = {
+                    x: newX,
+                    y: newY,
+                    z: newZ
+                };
                 
                 cameraRig.setAttribute('position', newPos);
                 requestAnimationFrame(updatePlayer);
