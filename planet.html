@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planet Viewer</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@1.4.0/dist/aframe-physics-system.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #id-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #controls-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            font-size: 12px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="id-display">ID: Loading...</div>
+    <div id="controls-info">WASD: Move | Mouse: Look | Click: Lock Pointer | SPACE: Jump</div>
+    
+    <a-scene physics="debug: false; gravity: 0" background="color: #000011">
+        <!-- Assets for ground texture -->
+        <a-assets>
+            <canvas id="groundTexture" width="1024" height="1024"></canvas>
+        </a-assets>
+        
+        <!-- Skybox -->
+        <a-sky color="#000011"></a-sky>
+
+        <!-- Terrain entity (will be generated via JavaScript) -->
+        <a-entity id="terrain" position="0 0 0"></a-entity>
+
+        <!-- Camera rig for player control -->
+        <a-entity id="camera-rig" position="0 1.6 0">
+            <a-entity 
+                id="camera"
+                camera 
+                look-controls="pointerLockEnabled: true"
+                wasd-controls="acceleration: 25"
+                position="0 0 0">
+            </a-entity>
+        </a-entity>
+
+        <!-- Lighting -->
+        <a-light type="directional" color="#fff" intensity="1" position="5 10 7"></a-light>
+        <a-light type="ambient" color="#fff" intensity="0.4"></a-light>
+    </a-scene>
+
+    <script>
+        // Get the ID from query string
+        const urlParams = new URLSearchParams(window.location.search);
+        const planetId = urlParams.get('id') || 'No ID provided';
+        
+        // Display the ID
+        document.getElementById('id-display').textContent = 'ID: ' + planetId;
+        
+        // Generate procedural ground texture
+        function generateGroundTexture(seed) {
+            const canvas = document.getElementById('groundTexture');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const imageData = ctx.createImageData(width, height);
+            const data = imageData.data;
+            
+            // Seed the random number generator
+            let random = (() => {
+                let x = Math.sin(seed) * 10000;
+                return () => {
+                    x = Math.sin(x) * 10000;
+                    return x - Math.floor(x);
+                };
+            })();
+            
+            // Generate Perlin-like noise using simple layered noise
+            for (let i = 0; i < width * height; i++) {
+                const x = i % width;
+                const y = Math.floor(i / width);
+                
+                // Multiple octaves of noise
+                let value = 0;
+                let amplitude = 1;
+                let frequency = 1;
+                let maxValue = 0;
+                
+                for (let octave = 0; octave < 4; octave++) {
+                    const sampleX = (x / width) * frequency;
+                    const sampleY = (y / height) * frequency;
+                    
+                    // Simple noise function
+                    const noise = Math.sin(sampleX * 12.9898 + sampleY * 78.233 + seed) * 43758.5453;
+                    value += (noise - Math.floor(noise)) * amplitude;
+                    
+                    maxValue += amplitude;
+                    amplitude *= 0.5;
+                    frequency *= 2;
+                }
+                
+                value = (value / maxValue) * 255;
+                
+                // Add some variation for dirt/grass appearance
+                const variation = Math.sin((x * 7 + y * 13) * 0.1 + seed) * 30 + 30;
+                value = Math.max(0, Math.min(255, value + variation));
+                
+                // Create grayscale + brown tones
+                const r = Math.floor(value * 0.7 + 40);
+                const g = Math.floor(value * 0.65 + 35);
+                const b = Math.floor(value * 0.4 + 20);
+                
+                const pixelIndex = i * 4;
+                data[pixelIndex] = r;
+                data[pixelIndex + 1] = g;
+                data[pixelIndex + 2] = b;
+                data[pixelIndex + 3] = 255;
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            return canvas;
+        }
+        
+        // Generate seed from ID
+        let idSeed = 0;
+        if (planetId !== 'No ID provided') {
+            for (let i = 0; i < planetId.length; i++) {
+                idSeed += planetId.charCodeAt(i) * (i + 1);
+            }
+        } else {
+            idSeed = Math.random() * 10000;
+        }
+        
+        generateGroundTexture(idSeed);
+        
+        // Player movement and physics
+        const player = {
+            velocity: { x: 0, y: 0, z: 0 },
+            isGrounded: false,
+            jumpPower: 10,
+            gravity: -30,
+            speed: 0.1
+        };
+        
+        const keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false,
+            space: false
+        };
+        
+        const cameraRig = document.getElementById('camera-rig');
+        const camera = document.getElementById('camera');
+        const terrain = document.getElementById('terrain');
+        
+        // Function to generate heightmap
+        function getHeight(x, z, seed) {
+            let value = 0;
+            let amplitude = 1;
+            let frequency = 1;
+            let maxValue = 0;
+            
+            for (let octave = 0; octave < 5; octave++) {
+                const sampleX = x * frequency * 0.01;
+                const sampleZ = z * frequency * 0.01;
+                
+                const noise = Math.sin(sampleX * 12.9898 + sampleZ * 78.233 + seed) * 43758.5453;
+                value += (noise - Math.floor(noise)) * amplitude;
+                
+                maxValue += amplitude;
+                amplitude *= 0.5;
+                frequency *= 2;
+            }
+            
+            value = (value / maxValue);
+            return (value - 0.5) * 80; // Scale to -40 to 40 units
+        }
+        
+        // Generate terrain mesh
+        function createTerrainMesh(seed, groundColor) {
+            const geometry = new THREE.PlaneGeometry(10000, 10000, 200, 200);
+            geometry.rotateX(-Math.PI / 2);
+            
+            const positionAttribute = geometry.getAttribute('position');
+            for (let i = 0; i < positionAttribute.count; i++) {
+                const x = positionAttribute.getX(i);
+                const z = positionAttribute.getZ(i);
+                const height = getHeight(x, z, seed);
+                positionAttribute.setY(i, height);
+            }
+            positionAttribute.needsUpdate = true;
+            geometry.computeVertexNormals();
+            
+            const material = new THREE.MeshPhongMaterial({
+                map: new THREE.CanvasTexture(document.getElementById('groundTexture')),
+                color: new THREE.Color(groundColor),
+                side: THREE.DoubleSide
+            });
+            material.map.magFilter = THREE.NearestFilter;
+            material.map.minFilter = THREE.NearestFilter;
+            material.map.repeat.set(300, 300);
+            
+            const mesh = new THREE.Mesh(geometry, material);
+            return mesh;
+        }
+        
+        // Optional: Use the ID to generate scene properties
+        if (planetId !== 'No ID provided') {
+            // Generate a hash-based color scheme from the ID
+            let hash = 0;
+            for (let i = 0; i < planetId.length; i++) {
+                const char = planetId.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            
+            // Generate muted earth-tone colors based on hash
+            const hue = Math.abs(hash) % 360;
+            // Use muted saturation (25-45%) and mid-range lightness (35-55%) for earth tones
+            const saturation = 25 + (Math.abs(hash) % 20); // 25-45%
+            const lightness = 35 + (Math.abs(hash >> 8) % 20); // 35-55%
+            const groundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            
+            // Create and add terrain mesh
+            const terrainMesh = createTerrainMesh(idSeed, groundColor);
+            
+            // Wait for scene to load before adding mesh
+            const sceneEl = document.querySelector('a-scene');
+            sceneEl.addEventListener('loaded', () => {
+                terrain.setObject3D('mesh', terrainMesh);
+            });
+            
+            // Generate gravity based on ID (range from -10 to -50)
+            const gravityRange = 40; // Range of gravity values
+            const gravityMin = -50;
+            const gravityValue = gravityMin + (Math.abs(hash >> 16) % gravityRange);
+            player.gravity = gravityValue;
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keys.w = true;
+            if (key === 'a') keys.a = true;
+            if (key === 's') keys.s = true;
+            if (key === 'd') keys.d = true;
+            if (key === ' ') {
+                keys.space = true;
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keys.w = false;
+            if (key === 'a') keys.a = false;
+            if (key === 's') keys.s = false;
+            if (key === 'd') keys.d = false;
+            if (key === ' ') keys.space = false;
+        });
+        
+        // Generate default terrain if no ID
+        if (planetId === 'No ID provided') {
+            const defaultColor = 'hsl(30, 35%, 40%)';
+            const terrainMesh = createTerrainMesh(idSeed, defaultColor);
+            
+            const sceneEl = document.querySelector('a-scene');
+            sceneEl.addEventListener('loaded', () => {
+                terrain.setObject3D('mesh', terrainMesh);
+            });
+        }
+        
+        // Animation loop for gravity and movement
+        const scene = document.querySelector('a-scene');
+        scene.addEventListener('loaded', () => {
+            let lastTime = Date.now();
+            
+            const updatePlayer = () => {
+                const currentTime = Date.now();
+                const deltaTime = (currentTime - lastTime) / 1000;
+                lastTime = currentTime;
+                
+                // Get camera direction for movement
+                const cameraDirection = new THREE.Vector3();
+                const camera3d = camera.getObject3D('camera');
+                camera3d.getWorldDirection(cameraDirection);
+                cameraDirection.y = 0; // Keep movement horizontal
+                cameraDirection.normalize();
+                
+                // Right vector
+                const rightVector = new THREE.Vector3();
+                rightVector.crossVectors(cameraDirection, new THREE.Vector3(0, 1, 0)).normalize();
+                
+                // WASD movement
+                const moveDirection = new THREE.Vector3(0, 0, 0);
+                if (keys.w) moveDirection.add(cameraDirection);
+                if (keys.s) moveDirection.sub(cameraDirection);
+                if (keys.d) moveDirection.add(rightVector);
+                if (keys.a) moveDirection.sub(rightVector);
+                
+                if (moveDirection.length() > 0) {
+                    moveDirection.normalize();
+                    moveDirection.multiplyScalar(player.speed);
+                }
+                
+                // Apply horizontal velocity
+                player.velocity.x = moveDirection.x;
+                player.velocity.z = moveDirection.z;
+                
+                // Update position
+                const currentPos = cameraRig.getAttribute('position');
+                
+                // Ground collision with heightmap BEFORE gravity application
+                const terrainHeightAtPlayer = getHeight(currentPos.x, currentPos.z, idSeed);
+                const standingHeight = terrainHeightAtPlayer + 1.6; // Player height above terrain
+                
+                // Check if currently grounded before applying gravity
+                const wasGrounded = player.isGrounded || currentPos.y <= standingHeight;
+                
+                // Apply gravity only if not grounded
+                if (!wasGrounded) {
+                    player.velocity.y += player.gravity * deltaTime;
+                } else {
+                    player.velocity.y = 0; // Reset velocity when grounded
+                }
+                
+                // Jump
+                if (keys.space && wasGrounded) {
+                    player.velocity.y = player.jumpPower;
+                }
+                
+                const newPos = {
+                    x: currentPos.x + player.velocity.x,
+                    y: currentPos.y + player.velocity.y * deltaTime,
+                    z: currentPos.z + player.velocity.z
+                };
+                
+                // Final collision check to ensure player stays on ground
+                const terrainHeightAtNewPos = getHeight(newPos.x, newPos.z, idSeed);
+                const newStandingHeight = terrainHeightAtNewPos + 1.6;
+                
+                if (newPos.y <= newStandingHeight) {
+                    // Collision with terrain
+                    player.isGrounded = true;
+                    player.velocity.y = 0;
+                    newPos.y = newStandingHeight;
+                } else {
+                    player.isGrounded = false;
+                }
+                
+                cameraRig.setAttribute('position', newPos);
+                requestAnimationFrame(updatePlayer);
+            };
+            
+            updatePlayer();
+        });
+    </script>
+</body>
+</html>
