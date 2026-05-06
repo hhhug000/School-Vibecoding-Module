@@ -42,6 +42,9 @@
     </a-scene>
 
     <script>
+        // Store planet data for collision detection
+        let planets = [];
+
         // Seeded random number generator for consistent generation
         class SeededRandom {
             constructor(seed) {
@@ -134,6 +137,15 @@
                 `);
                 
                 planetsContainer.appendChild(planet);
+                
+                // Store planet data for collision detection
+                planets.push({
+                    id: planetId,
+                    x: x,
+                    y: y,
+                    z: z,
+                    radius: radius
+                });
 
                 // Add rings to some planets
                 if (random.next() > 0.6) {
@@ -235,6 +247,21 @@
                     y: pos.y + this.velocity.y,
                     z: pos.z + this.velocity.z
                 });
+
+                // Check collision with planets
+                const cameraPos = this.camera.getAttribute('position');
+                for (let planet of planets) {
+                    const dx = cameraPos.x - planet.x;
+                    const dy = cameraPos.y - planet.y;
+                    const dz = cameraPos.z - planet.z;
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    
+                    if (distance < planet.radius) {
+                        // Collision detected - navigate to planet page
+                        window.location.href = `planet.html?id=${planet.id}`;
+                        return;
+                    }
+                }
 
                 // Continue updating
                 requestAnimationFrame(() => this.update());
