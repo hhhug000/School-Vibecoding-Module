@@ -196,6 +196,22 @@
             return (value - 0.5) * 80; // Scale to -40 to 40 units
         }
         
+        // Raycast downward to find terrain collision
+        function getTerrainHeightRaycast(x, z, seed) {
+            // Sample multiple points in a small area to smooth out noise
+            const sampleDistance = 0.5;
+            const samples = [];
+            
+            for (let dx = -sampleDistance; dx <= sampleDistance; dx += sampleDistance) {
+                for (let dz = -sampleDistance; dz <= sampleDistance; dz += sampleDistance) {
+                    samples.push(getHeight(x + dx, z + dz, seed));
+                }
+            }
+            
+            // Return average for smooth, stable collision
+            return samples.reduce((a, b) => a + b, 0) / samples.length;
+        }
+        
         // Generate terrain mesh
         function createTerrainMesh(seed, groundColor) {
             const geometry = new THREE.PlaneGeometry(10000, 10000, 200, 200);
@@ -335,17 +351,24 @@
                 let newZ = currentPos.z + player.velocity.z;
                 let newY = currentPos.y;
 
-                const epsilon = 0.1;
-
                 // Apply gravity
                 player.velocity.y += player.gravity * deltaTime;
                 newY += player.velocity.y * deltaTime;
 
-                // Snap to terrain after movement to prevent tunneling
-                const terrainHeightAtNewPos = getHeight(newX, newZ, idSeed);
+                // Get stable terrain height using raycasting
+                const terrainHeightAtNewPos = getTerrainHeightRaycast(newX, newZ, idSeed);
                 const standingHeight = terrainHeightAtNewPos + 1.6;
+                
+                const collisionDistance = 0.3; // Hysteresis: only collide if moving downward into terrain
 
-                if (newY <= standingHeight + epsilon) {
+                // Check for collision with terrain
+                if (newY < standingHeight && player.velocity.y <= 0) {
+                    // Only snap to terrain when moving downward
+                    newY = standingHeight;
+                    player.velocity.y = 0;
+                    player.isGrounded = true;
+                } else if (newY < standingHeight - collisionDistance) {
+                    // Emergency collision prevention for edge cases
                     newY = standingHeight;
                     player.velocity.y = 0;
                     player.isGrounded = true;
