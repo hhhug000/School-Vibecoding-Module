@@ -50,50 +50,79 @@
             constructor(seed) {
                 this.seed = seed;
             }
-            
+
             next() {
                 this.seed = (this.seed * 9301 + 49297) % 233280;
                 return this.seed / 233280;
             }
         }
 
+        const seedCookieName = "space_seed";
+
+        const getCookie = (name) => {
+            const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
+            const match = cookies.find((cookie) => cookie.startsWith(`${name}=`));
+            return match ? decodeURIComponent(match.split("=")[1]) : "";
+        };
+
+        const stringToSeed = (value) => {
+            let hash = 2166136261;
+            for (let i = 0; i < value.length; i++) {
+                hash ^= value.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+            return Math.abs(hash) || 42;
+        };
+
+        const getSeedValue = () => {
+            const cookieValue = getCookie(seedCookieName);
+            if (!cookieValue) {
+                return 42;
+            }
+
+            const numeric = Number(cookieValue);
+            if (Number.isFinite(numeric)) {
+                return Math.abs(Math.trunc(numeric)) || 42;
+            }
+
+            return stringToSeed(cookieValue);
+        };
+
         // Generate random alphanumeric string
-        function generateRandomString(length) {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            let result = '';
+        function generateRandomString(length, random) {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            let result = "";
             for (let i = 0; i < length; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
+                result += chars.charAt(Math.floor(random.next() * chars.length));
             }
             return result;
         }
 
         // Generate stars
-        function generateStars() {
+        function generateStars(random) {
             const starsContainer = document.getElementById('stars');
             const starCount = 2000;
             
             for (let i = 0; i < starCount; i++) {
-                const angle1 = Math.random() * Math.PI * 2;
-                const angle2 = Math.random() * Math.PI * 2;
-                const distance = 500 + Math.random() * 500;
+                const angle1 = random.next() * Math.PI * 2;
+                const angle2 = random.next() * Math.PI * 2;
+                const distance = 500 + random.next() * 500;
                 
                 const x = Math.cos(angle1) * Math.cos(angle2) * distance;
                 const y = Math.sin(angle2) * distance;
                 const z = Math.sin(angle1) * Math.cos(angle2) * distance;
                 
                 const star = document.createElement('a-sphere');
-                star.setAttribute('radius', 0.5 + Math.random() * 1.5);
+                star.setAttribute('radius', 0.5 + random.next() * 1.5);
                 star.setAttribute('position', `${x} ${y} ${z}`);
-                star.setAttribute('material', `color: #fff; emissive: #fff; emissiveIntensity: ${0.5 + Math.random() * 0.5}`);
+                star.setAttribute('material', `color: #fff; emissive: #fff; emissiveIntensity: ${0.5 + random.next() * 0.5}`);
                 starsContainer.appendChild(star);
             }
         }
 
         // Generate planets procedurally
-        function generatePlanets() {
+        function generatePlanets(random) {
             const planetsContainer = document.getElementById('planets');
-            const seed = 42;
-            const random = new SeededRandom(seed);
             const planetCount = 15;
 
             const colors = [
@@ -121,7 +150,7 @@
                 const radius = 8 + random.next() * 20;
                 const color = colors[Math.floor(random.next() * colors.length)];
                 const rotationSpeed = 20 + random.next() * 60;
-                const planetId = generateRandomString(32);
+                const planetId = generateRandomString(32, random);
                 
                 const planet = document.createElement('a-sphere');
                 planet.setAttribute('radius', radius);
@@ -270,8 +299,10 @@
 
         // Initialize scene
         function init() {
-            generateStars();
-            generatePlanets();
+            const seed = getSeedValue();
+            const random = new SeededRandom(seed);
+            generateStars(random);
+            generatePlanets(random);
             new FloatyController();
         }
 
