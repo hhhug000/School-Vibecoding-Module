@@ -22,6 +22,30 @@
             font-size: 14px;
             z-index: 100;
         }
+        #points-display {
+            position: absolute;
+            top: 52px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #timer-display {
+            position: absolute;
+            top: 94px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 100;
+        }
         #controls-info {
             position: absolute;
             bottom: 10px;
@@ -34,10 +58,36 @@
             font-size: 12px;
             z-index: 100;
         }
+        #takeoff-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-family: sans-serif;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            z-index: 100;
+            transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+        #takeoff-button:hover,
+        #takeoff-button:focus-visible {
+            transform: translateY(-2px);
+            border-color: white;
+            color: white;
+        }
     </style>
 </head>
 <body>
     <div id="id-display">ID: Loading...</div>
+    <div id="points-display">Points: 0</div>
+    <div id="timer-display">Time: 05:00</div>
+    <button id="takeoff-button" type="button">Takeoff</button>
     <div id="controls-info">WASD: Move | Mouse: Look | Click: Lock Pointer | SPACE: Jump</div>
     
     <a-scene background="color: #000011">
@@ -52,13 +102,15 @@
         <!-- Terrain entity (will be generated via JavaScript) -->
         <a-entity id="terrain" position="0 0 0"></a-entity>
 
+        <!-- Coins container -->
+        <a-entity id="coins"></a-entity>
+
         <!-- Camera rig for player control -->
         <a-entity id="camera-rig" position="0 1.6 0">
             <a-entity 
                 id="camera"
                 camera 
                 look-controls="pointerLockEnabled: true"
-                wasd-controls="acceleration: 25"
                 position="0 0 0">
             </a-entity>
         </a-entity>
@@ -69,12 +121,105 @@
     </a-scene>
 
     <script>
+        const pointsCookieName = "space_points";
+        const coinsCookieName = "space_coins";
+        const timerCookieName = "space_timer_start";
+        const timerDurationMs = 5 * 60 * 1000;
+
+        const getCookie = (name) => {
+            const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
+            const match = cookies.find((cookie) => cookie.startsWith(`${name}=`));
+            return match ? decodeURIComponent(match.split("=")[1]) : "";
+        };
+
+        const setCookie = (name, value, days = 365) => {
+            const expires = new Date(Date.now() + days * 864e5).toUTCString();
+            document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+        };
+
+        const getPoints = () => {
+            const value = Number(getCookie(pointsCookieName));
+            return Number.isFinite(value) ? value : 0;
+        };
+
+        const setPoints = (value) => {
+            setCookie(pointsCookieName, String(Math.max(0, Math.floor(value))));
+            updatePointsDisplay();
+        };
+
+        const updatePointsDisplay = () => {
+            const display = document.getElementById("points-display");
+            display.textContent = `Points: ${getPoints()}`;
+        };
+
+        const getTimerStart = () => {
+            const value = Number(getCookie(timerCookieName));
+            if (Number.isFinite(value) && value > 0) {
+                return value;
+            }
+            const now = Date.now();
+            setCookie(timerCookieName, String(now));
+            return now;
+        };
+
+        const getRemainingMs = () => {
+            const elapsed = Date.now() - getTimerStart();
+            return Math.max(0, timerDurationMs - elapsed);
+        };
+
+        const formatTime = (ms) => {
+            const totalSeconds = Math.ceil(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}:${String(seconds).padStart(2, "0")}`;
+        };
+
+        const updateTimerDisplay = () => {
+            const display = document.getElementById("timer-display");
+            display.textContent = `Time: ${formatTime(getRemainingMs())}`;
+        };
+
+        const checkTimer = () => {
+            const remaining = getRemainingMs();
+            updateTimerDisplay();
+            if (remaining <= 0) {
+                window.location.href = "gameover.html";
+            }
+        };
+
+        const getCoinState = () => {
+            const raw = getCookie(coinsCookieName);
+            if (!raw) {
+                return {};
+            }
+            try {
+                return JSON.parse(raw);
+            } catch (error) {
+                return {};
+            }
+        };
+
+        const setCoinState = (state) => {
+            setCookie(coinsCookieName, JSON.stringify(state));
+        };
+
+        const generateCoinId = () => {
+            return `coin_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
+        };
+
         // Get the ID from query string
         const urlParams = new URLSearchParams(window.location.search);
         const planetId = urlParams.get('id') || 'No ID provided';
+        const planetKey = planetId === 'No ID provided' ? 'unknown' : planetId;
         
         // Display the ID
         document.getElementById('id-display').textContent = 'ID: ' + planetId;
+        updatePointsDisplay();
+        checkTimer();
+        setInterval(checkTimer, 500);
+        document.getElementById('takeoff-button').addEventListener('click', () => {
+            window.location.href = 'space.html';
+        });
         
         // Generate procedural ground texture
         function generateGroundTexture(seed) {
@@ -172,6 +317,32 @@
         const cameraRig = document.getElementById('camera-rig');
         const camera = document.getElementById('camera');
         const terrain = document.getElementById('terrain');
+        const coinsContainer = document.getElementById('coins');
+        const activeCoins = [];
+        const coinPickupRadius = 2.8;
+        let audioContext = null;
+
+        const playPickupSound = () => {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            if (audioContext.state === "suspended") {
+                audioContext.resume();
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.type = "triangle";
+            oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.15);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.16);
+        };
         
         // Function to generate heightmap
         function getHeight(x, z, seed) {
@@ -238,6 +409,57 @@
             
             const mesh = new THREE.Mesh(geometry, material);
             return mesh;
+        }
+
+        function ensurePlanetCoins(seed) {
+            const state = getCoinState();
+            if (!state[planetKey]) {
+                const coinCount = 8;
+                const coinRange = 160;
+                const positions = [];
+
+                for (let i = 0; i < coinCount; i++) {
+                    const x = (Math.random() * 2 - 1) * coinRange;
+                    const z = (Math.random() * 2 - 1) * coinRange;
+                    const y = getTerrainHeightRaycast(x, z, seed) + 1.2;
+                    positions.push({
+                        id: generateCoinId(),
+                        x: Number(x.toFixed(2)),
+                        y: Number(y.toFixed(2)),
+                        z: Number(z.toFixed(2))
+                    });
+                }
+
+                state[planetKey] = {
+                    positions,
+                    collected: []
+                };
+                setCoinState(state);
+            }
+
+            return state[planetKey];
+        }
+
+        function spawnCoins(coinData) {
+            coinsContainer.innerHTML = "";
+            activeCoins.length = 0;
+            const collected = new Set(coinData.collected || []);
+
+            for (const coin of coinData.positions || []) {
+                if (collected.has(coin.id)) {
+                    continue;
+                }
+
+                const entity = document.createElement('a-torus');
+                entity.setAttribute('radius', 0.7);
+                entity.setAttribute('radius-tubular', 0.15);
+                entity.setAttribute('position', `${coin.x} ${coin.y} ${coin.z}`);
+                entity.setAttribute('rotation', '90 0 0');
+                entity.setAttribute('material', 'color: #ffd34d; emissive: #ffea9a; emissiveIntensity: 0.6');
+                entity.setAttribute('animation', 'property: rotation; to: 90 360 0; dur: 2000; loop: true; easing: linear');
+                coinsContainer.appendChild(entity);
+                activeCoins.push({ id: coin.id, x: coin.x, y: coin.y, z: coin.z, entity });
+            }
         }
         
         // Optional: Use the ID to generate scene properties
@@ -310,6 +532,8 @@
         const scene = document.querySelector('a-scene');
         scene.addEventListener('loaded', () => {
             let lastTime = Date.now();
+            const coinData = ensurePlanetCoins(idSeed);
+            spawnCoins(coinData);
             
             const updatePlayer = () => {
                 const currentTime = Date.now();
@@ -389,6 +613,39 @@
                 };
                 
                 cameraRig.setAttribute('position', newPos);
+
+                // Coin pickup
+                if (activeCoins.length > 0) {
+                    const state = getCoinState();
+                    const planetState = state[planetKey];
+                    const collected = new Set(planetState.collected || []);
+                    const remaining = [];
+
+                    for (const coin of activeCoins) {
+                        const dx = newX - coin.x;
+                        const dy = newY - coin.y;
+                        const dz = newZ - coin.z;
+                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                        if (distance < coinPickupRadius && !collected.has(coin.id)) {
+                            collected.add(coin.id);
+                            if (coin.entity && coin.entity.parentNode) {
+                                coin.entity.parentNode.removeChild(coin.entity);
+                            }
+                            setPoints(getPoints() + 1);
+                            playPickupSound();
+                        } else {
+                            remaining.push(coin);
+                        }
+                    }
+
+                    activeCoins.length = 0;
+                    activeCoins.push(...remaining);
+                    planetState.collected = Array.from(collected);
+                    state[planetKey] = planetState;
+                    setCoinState(state);
+                }
+
                 requestAnimationFrame(updatePlayer);
             };
             

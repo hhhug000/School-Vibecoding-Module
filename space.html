@@ -22,6 +22,30 @@
             font-size: 14px;
             z-index: 10;
         }
+        #score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 14px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10;
+        }
+        #timer {
+            position: absolute;
+            top: 64px;
+            right: 20px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 14px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -29,6 +53,8 @@
         <div>Use arrow keys or WASD to move, Use space and ctrl to change height</div>
         <div>Click to lock pointer</div>
     </div>
+    <div id="score">Points: 0</div>
+    <div id="timer">Time: 05:00</div>
 
     <a-scene background="color: #000000">
         <!-- Camera with look-controls for pointer lock -->
@@ -58,11 +84,68 @@
         }
 
         const seedCookieName = "space_seed";
+        const pointsCookieName = "space_points";
+        const timerCookieName = "space_timer_start";
+        const timerDurationMs = 5 * 60 * 1000;
 
         const getCookie = (name) => {
             const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
             const match = cookies.find((cookie) => cookie.startsWith(`${name}=`));
             return match ? decodeURIComponent(match.split("=")[1]) : "";
+        };
+
+        const setCookie = (name, value, days = 365) => {
+            const expires = new Date(Date.now() + days * 864e5).toUTCString();
+            document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/`;
+        };
+
+        const getPoints = () => {
+            const value = Number(getCookie(pointsCookieName));
+            return Number.isFinite(value) ? value : 0;
+        };
+
+        const setPoints = (value) => {
+            setCookie(pointsCookieName, String(Math.max(0, Math.floor(value))));
+        };
+
+        const updateScoreDisplay = () => {
+            const score = document.getElementById("score");
+            score.textContent = `Points: ${getPoints()}`;
+        };
+
+        const getTimerStart = () => {
+            const value = Number(getCookie(timerCookieName));
+            if (Number.isFinite(value) && value > 0) {
+                return value;
+            }
+            const now = Date.now();
+            setCookie(timerCookieName, String(now));
+            return now;
+        };
+
+        const getRemainingMs = () => {
+            const elapsed = Date.now() - getTimerStart();
+            return Math.max(0, timerDurationMs - elapsed);
+        };
+
+        const formatTime = (ms) => {
+            const totalSeconds = Math.ceil(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}:${String(seconds).padStart(2, "0")}`;
+        };
+
+        const updateTimerDisplay = () => {
+            const timer = document.getElementById("timer");
+            timer.textContent = `Time: ${formatTime(getRemainingMs())}`;
+        };
+
+        const checkTimer = () => {
+            const remaining = getRemainingMs();
+            updateTimerDisplay();
+            if (remaining <= 0) {
+                window.location.href = "gameover.html";
+            }
         };
 
         const stringToSeed = (value) => {
@@ -303,6 +386,10 @@
             const random = new SeededRandom(seed);
             generateStars(random);
             generatePlanets(random);
+            setPoints(getPoints());
+            updateScoreDisplay();
+            checkTimer();
+            setInterval(checkTimer, 500);
             new FloatyController();
         }
 
