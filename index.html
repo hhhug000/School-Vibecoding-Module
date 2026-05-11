@@ -258,6 +258,8 @@
     <script>
         const seedCookieName = "space_seed";
         const timerCookieName = "space_timer_start";
+        const pointsCookieName = "space_points";
+        const coinsCookieName = "space_coins";
         const optionsButton = document.getElementById("options-button");
         const optionsDialog = document.getElementById("options-dialog");
         const seedInput = document.getElementById("seed-input");
@@ -312,6 +314,8 @@
 
         startButton.addEventListener("click", (event) => {
             event.preventDefault();
+            clearCookie(pointsCookieName);
+            clearCookie(coinsCookieName);
             setCookie(timerCookieName, String(Date.now()));
             window.location.href = "space.html";
         });
