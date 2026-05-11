@@ -234,7 +234,7 @@
         <h1 class="title">Space Explorer</h1>
         <nav aria-label="Main menu">
             <ul class="menu">
-                <li><a href="space.html">Start Mission</a></li>
+                <li><a href="space.html" id="start-button">Start Mission</a></li>
                 <li><a href="#" id="options-button">Options</a></li>
                 <li><a href="#" id="exit-button">Exit</a></li>
             </ul>
@@ -257,12 +257,14 @@
     </dialog>
     <script>
         const seedCookieName = "space_seed";
+        const timerCookieName = "space_timer_start";
         const optionsButton = document.getElementById("options-button");
         const optionsDialog = document.getElementById("options-dialog");
         const seedInput = document.getElementById("seed-input");
         const seedSave = document.getElementById("seed-save");
         const seedRandom = document.getElementById("seed-random");
         const seedClear = document.getElementById("seed-clear");
+        const startButton = document.getElementById("start-button");
         const exitButton = document.getElementById("exit-button");
 
         const getCookie = (name) => {
@@ -306,6 +308,12 @@
         seedClear.addEventListener("click", () => {
             seedInput.value = "";
             clearCookie(seedCookieName);
+        });
+
+        startButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            setCookie(timerCookieName, String(Date.now()));
+            window.location.href = "space.html";
         });
 
         exitButton.addEventListener("click", (event) => {

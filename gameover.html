@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Over</title>
+    <style>
+        :root {
+            --bg-0: #05070d;
+            --bg-1: #0a0f1d;
+            --bg-2: #111827;
+            --accent: #f3c969;
+            --text: #f2f4f8;
+            --muted: #a9b0c2;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            background:
+                radial-gradient(1200px 600px at 70% -10%, rgba(106, 215, 255, 0.18), transparent 60%),
+                radial-gradient(800px 500px at 10% 110%, rgba(243, 201, 105, 0.14), transparent 60%),
+                linear-gradient(140deg, var(--bg-0), var(--bg-1) 40%, var(--bg-2));
+            font-family: "Rajdhani", "Trebuchet MS", sans-serif;
+            display: grid;
+            place-items: center;
+        }
+
+        .panel {
+            width: min(480px, 90vw);
+            padding: 32px;
+            background: rgba(7, 10, 20, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            text-align: left;
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 2rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        p {
+            margin: 0 0 20px;
+            color: var(--muted);
+        }
+
+        .score {
+            font-size: 1.4rem;
+            letter-spacing: 0.08em;
+            margin-bottom: 24px;
+        }
+
+        button {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(16, 24, 44, 0.8);
+            color: var(--text);
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+            transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+        }
+
+        button:hover,
+        button:focus-visible {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <main class="panel">
+        <h1>Game Over</h1>
+        <p>Mission time has ended.</p>
+        <div class="score" id="final-score">Points: 0</div>
+        <button type="button" id="home-button">Home Menu</button>
+    </main>
+
+    <script>
+        const cookiesToClear = [
+            "space_points",
+            "space_seed",
+            "space_coins",
+            "space_timer_start"
+        ];
+
+        const getCookie = (name) => {
+            const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
+            const match = cookies.find((cookie) => cookie.startsWith(`${name}=`));
+            return match ? decodeURIComponent(match.split("=")[1]) : "";
+        };
+
+        const clearCookie = (name) => {
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        };
+
+        const points = Number(getCookie("space_points"));
+        const finalScore = document.getElementById("final-score");
+        finalScore.textContent = `Points: ${Number.isFinite(points) ? points : 0}`;
+
+        document.getElementById("home-button").addEventListener("click", () => {
+            cookiesToClear.forEach(clearCookie);
+            window.location.href = "index.html";
+        });
+    </script>
+</body>
+</html>
